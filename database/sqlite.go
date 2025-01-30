@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"errors"
 	"log"
+
+	"github.com/Gmax76/identity/entity"
 )
 
 type sqliteDatabase struct {
@@ -29,14 +31,14 @@ func (s *sqliteDatabase) GetDb() *sql.DB {
 	return dbInstance.Db
 }
 
-func (s *sqliteDatabase) GetUsers() (*[]User, error) {
-	users := []User{}
+func (s *sqliteDatabase) GetUsers() (*[]entity.User, error) {
+	users := []entity.User{}
 	rows, err := dbInstance.Db.Query("SELECT id, first_name, last_name, email FROM USERS;")
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var user User
+	var user entity.User
 	for rows.Next() {
 		if err := rows.Scan(&user.ID, &user.FirstName, &user.LastName, &user.Email); err != nil {
 			return nil, err
@@ -46,12 +48,12 @@ func (s *sqliteDatabase) GetUsers() (*[]User, error) {
 	return &users, nil
 }
 
-func (s *sqliteDatabase) GetUser(u User) (*User, error) {
-	var user User
+func (s *sqliteDatabase) GetUser(u entity.User) (*entity.User, error) {
+	var user entity.User
 	err := dbInstance.Db.QueryRow("SELECT id, email, first_name, last_name, password FROM USERS WHERE email = ?", u.Email).Scan(&user.ID, &user.Email, &user.FirstName, &user.LastName, &user.Password)
 	if err == sql.ErrNoRows {
 		log.Printf("%v", err)
-		return nil, errors.New("User does not exist")
+		return nil, errors.New("user does not exist")
 	}
 	if err != nil {
 		log.Printf("%v", err)
@@ -60,7 +62,7 @@ func (s *sqliteDatabase) GetUser(u User) (*User, error) {
 	return &user, nil
 }
 
-func (s *sqliteDatabase) CreateUser(u User) (*User, error) {
+func (s *sqliteDatabase) CreateUser(u entity.User) (*entity.User, error) {
 	result, err := dbInstance.Db.Exec("INSERT INTO USERS (first_name,last_name,email,password) VALUES (?,?,?,?)", u.FirstName, u.LastName, u.Email, u.Password)
 	if err != nil {
 		log.Printf("Err: %v", err)
