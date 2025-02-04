@@ -4,12 +4,11 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"time"
 
 	"github.com/Gmax76/identity/database"
 	"github.com/Gmax76/identity/entity"
+	"github.com/Gmax76/identity/middleware"
 	"github.com/gin-gonic/gin"
-	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -20,15 +19,15 @@ type (
 		Login(ctx *gin.Context)
 	}
 	userController struct {
-		db database.Database
+		db             database.Database
+		authMiddleWare middleware.AuthenticationMiddleware
 	}
 )
 
-var secretKey = []byte("your-secret-key")
-
-func NewUserController(db database.Database) UserController {
+func NewUserController(db database.Database, am middleware.AuthenticationMiddleware) UserController {
 	return &userController{
-		db: db,
+		db:             db,
+		authMiddleWare: am,
 	}
 }
 
@@ -36,6 +35,7 @@ func (c *userController) GetAll(ctx *gin.Context) {
 	users, err := c.db.GetUsers()
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, fmt.Errorf("error: %v", err))
+		return
 	}
 	ctx.IndentedJSON(http.StatusOK, users)
 }
@@ -60,24 +60,13 @@ func (c *userController) Create(ctx *gin.Context) {
 	ctx.IndentedJSON(http.StatusCreated, createdUser)
 }
 
-func createToken(username string) (string, error) {
-	claims := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"sub": username,                         // Subject (user identifier)
-		"iss": "auth-app",                       // Issuer
-		"aud": "user",                           // Audience (user role)
-		"exp": time.Now().Add(time.Hour).Unix(), // Expiration time
-		"iat": time.Now().Unix(),                // Issued at
-	})
-
-	tokenString, err := claims.SignedString(secretKey)
-	if err != nil {
-		return "", err
-	}
-
-	return tokenString, nil
-}
-
 func (c *userController) Login(ctx *gin.Context) {
+	auth, authSet := ctx.Get("authenticated")
+	if !authSet {
+		log.Print("Pas de header authorization")
+	} else {
+		log.Printf("Auth: %v", auth)
+	}
 	var user entity.User
 	var hashedPass []byte
 	if err := ctx.BindJSON(&user); err != nil {
@@ -97,13 +86,14 @@ func (c *userController) Login(ctx *gin.Context) {
 	}
 	if err == nil {
 
-		tokenString, err := createToken(user.Email)
+		tokenString, err := c.authMiddleWare.CreateToken(user.Email)
 		if err != nil {
+			log.Print(err)
 			ctx.String(http.StatusInternalServerError, "Error creating token")
 			return
 		}
 		ctx.SetCookie("token", tokenString, 3600, "/", "localhost", false, true)
-		ctx.JSON(http.StatusOK, tokenString)
+		ctx.String(http.StatusOK, tokenString)
 		return
 	}
 }

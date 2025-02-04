@@ -6,6 +6,7 @@ import (
 
 	"github.com/Gmax76/identity/controller"
 	"github.com/Gmax76/identity/database"
+	"github.com/Gmax76/identity/middleware"
 )
 
 func init() {
@@ -13,13 +14,14 @@ func init() {
 
 func main() {
 	var (
-		db             database.Database         = database.NewSqliteDatabase()
-		userController controller.UserController = controller.NewUserController(db)
+		db                       = database.NewSqliteDatabase()
+		authenticationMiddleware = middleware.NewAuthenticationMiddleware()
+		userController           = controller.NewUserController(db, authenticationMiddleware)
 	)
 	router := gin.Default()
 
 	router.GET("/users", userController.GetAll)
 	router.POST("/users", userController.Create)
-	router.POST("/login", userController.Login)
+	router.POST("/login", authenticationMiddleware.IsAuthenticated, userController.Login)
 	router.Run("localhost:8080")
 }
